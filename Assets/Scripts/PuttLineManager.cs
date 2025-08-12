@@ -1,4 +1,4 @@
-// PuttLineManager_v2.cs
+// PuttLineManager.cs
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -8,6 +8,13 @@ using UnityEngine.XR.ARSubsystems;
 
 public class PuttLineManager : MonoBehaviour
 {
+
+// Add near top:
+[SerializeField] private GreenAnalyzer greenAnalyzer;   // drag your GreenAnalyzer
+[SerializeField] private bool autoAnalyzeBetweenPoints = true;
+[SerializeField] private float analyzePaddingMeters = 0.5f;
+
+
     [Header("References")]
     [SerializeField] private Transform rayOrigin;                   // RayOrigin under Right Controller (for fallback casts)
     [SerializeField] private ControllerReticle reticle;             // Optional: use current reticle hit when selecting
@@ -139,53 +146,59 @@ public class PuttLineManager : MonoBehaviour
     }
 
     private void DrawAndCompute()
-{
-    if (!hasA || !hasB) return;
-
-    if (puttLineRenderer)
     {
-        puttLineRenderer.enabled = true;
-        puttLineRenderer.SetPosition(0, pointA);
-        puttLineRenderer.SetPosition(1, pointB);
-    }
+        if (!hasA || !hasB) return;
 
-    float distMeters = Vector3.Distance(pointA, pointB);
-    float distFeet   = distMeters * 3.28084f;
-
-    Vector3 mid = Vector3.Lerp(pointA, pointB, 0.5f);
-
-    // NEW: use LocalSlopeEstimator_v2 (drag it into this script or FindFirstObjectByType)
-#if UNITY_6000_0_OR_NEWER || UNITY_2023_1_OR_NEWER
-    var slope = FindFirstObjectByType<LocalSlopeEstimator_v2>(FindObjectsInactive.Exclude);
-#else
-    var slope = FindObjectOfType<LocalSlopeEstimator_v2>();
-#endif
-    float slopePct, crossSlopePct;
-    Vector3 downhill;
-
-    // line direction on XZ for cross-slope calc
-    Vector3 lineDir = (pointB - pointA); lineDir.y = 0f;
-    lineDir = lineDir.sqrMagnitude > 1e-6f ? lineDir.normalized : Vector3.forward;
-
-    if (slope && slope.TryEstimateSlopeAt(mid, lineDir, out slopePct, out crossSlopePct, out downhill))
-    {
-        // Use CROSS-SLOPE for break (component perpendicular to the putt path)
-        float breakInches = distFeet * (crossSlopePct) / 2f;
-
-        UpdateHud(distFeet, slopePct, breakInches); // keep showing total slope% if you want
-
-        if (fallLineRenderer)
+        if (puttLineRenderer)
         {
-            fallLineRenderer.enabled = true;
-            fallLineRenderer.SetPosition(0, mid);
-            fallLineRenderer.SetPosition(1, mid + downhill * fallLineLength);
+            puttLineRenderer.enabled = true;
+            puttLineRenderer.SetPosition(0, pointA);
+            puttLineRenderer.SetPosition(1, pointB);
         }
-    }
-    else
-    {
-        UpdateHud(distFeet, float.NaN, float.NaN);
-        if (fallLineRenderer) fallLineRenderer.enabled = false;
-    }
+
+        float distMeters = Vector3.Distance(pointA, pointB);
+        float distFeet = distMeters * 3.28084f;
+
+        Vector3 mid = Vector3.Lerp(pointA, pointB, 0.5f);
+
+        // NEW: use LocalSlopeEstimator (drag it into this script or FindFirstObjectByType)
+#if UNITY_6000_0_OR_NEWER || UNITY_2023_1_OR_NEWER
+        var slope = FindFirstObjectByType<LocalSlopeEstimator>(FindObjectsInactive.Exclude);
+#else
+    var slope = FindObjectOfType<LocalSlopeEstimator>();
+#endif
+        float slopePct, crossSlopePct;
+        Vector3 downhill;
+
+        // line direction on XZ for cross-slope calc
+        Vector3 lineDir = (pointB - pointA); lineDir.y = 0f;
+        lineDir = lineDir.sqrMagnitude > 1e-6f ? lineDir.normalized : Vector3.forward;
+
+        if (slope && slope.TryEstimateSlopeAt(mid, lineDir, out slopePct, out crossSlopePct, out downhill))
+        {
+            // Use CROSS-SLOPE for break (component perpendicular to the putt path)
+            float breakInches = distFeet * (crossSlopePct) / 2f;
+
+            UpdateHud(distFeet, slopePct, breakInches); // keep showing total slope% if you want
+
+            if (fallLineRenderer)
+            {
+                fallLineRenderer.enabled = true;
+                fallLineRenderer.SetPosition(0, mid);
+                fallLineRenderer.SetPosition(1, mid + downhill * fallLineLength);
+            }
+        }
+        else
+        {
+            UpdateHud(distFeet, float.NaN, float.NaN);
+            if (fallLineRenderer) fallLineRenderer.enabled = false;
+        }
+    // In DrawAndCompute(), after drawing and HUD updates, append:
+if (autoAnalyzeBetweenPoints && greenAnalyzer != null)
+{
+    greenAnalyzer.AnalyzeBetweenPoints(pointA, pointB, analyzePaddingMeters);
+}
+
 }
 
     private void UpdateHud(float distFeet, float slopePct, float breakInches)

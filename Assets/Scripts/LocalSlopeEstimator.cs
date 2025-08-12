@@ -1,10 +1,10 @@
-// LocalSlopeEstimator_v2.cs
+// LocalSlopeEstimator.cs
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
-public class LocalSlopeEstimator_v2 : MonoBehaviour
+public class LocalSlopeEstimator : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private ARRaycastManager raycastManager; // drag from XR Origin
