@@ -1,0 +1,3 @@
+repository "xrealSdkMain/xrealSdkMain@20066227399868@cloud"
+  path "/"
+    smartbranch "/main/SlopeMesh"
