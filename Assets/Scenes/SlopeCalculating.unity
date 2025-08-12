@@ -713,8 +713,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e858588ee61e198438451a3acc97b39d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rayOrigin: {fileID: 1200068730}
-  reticle: {fileID: 615142316}
   raycastManager: {fileID: 491143284}
   usePhysicsFallback: 1
   physicsMask:
@@ -725,7 +723,7 @@ MonoBehaviour:
   samplesPerRing: 12
   overhead: 0.5
   trackables: 153
-  fallLineDebug: {fileID: 0}
+  madK: 2.5
 --- !u!1 &678643469
 GameObject:
   m_ObjectHideFlags: 0
@@ -1547,7 +1545,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2034154289
 Transform:
   m_ObjectHideFlags: 0
@@ -1771,6 +1769,10 @@ PrefabInstance:
     - target: {fileID: 5780423515171224066, guid: 9cec763ca94a5cf439849f0d341f64e9, type: 3}
       propertyPath: m_Name
       value: Meshing
+      objectReference: {fileID: 0}
+    - target: {fileID: 5780423515171224066, guid: 9cec763ca94a5cf439849f0d341f64e9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

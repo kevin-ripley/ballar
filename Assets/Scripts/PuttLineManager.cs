@@ -139,44 +139,54 @@ public class PuttLineManager : MonoBehaviour
     }
 
     private void DrawAndCompute()
+{
+    if (!hasA || !hasB) return;
+
+    if (puttLineRenderer)
     {
-        if (!hasA || !hasB) return;
+        puttLineRenderer.enabled = true;
+        puttLineRenderer.SetPosition(0, pointA);
+        puttLineRenderer.SetPosition(1, pointB);
+    }
 
-        // Draw putt line
-        if (puttLineRenderer)
+    float distMeters = Vector3.Distance(pointA, pointB);
+    float distFeet   = distMeters * 3.28084f;
+
+    Vector3 mid = Vector3.Lerp(pointA, pointB, 0.5f);
+
+    // NEW: use LocalSlopeEstimator_v2 (drag it into this script or FindFirstObjectByType)
+#if UNITY_6000_0_OR_NEWER || UNITY_2023_1_OR_NEWER
+    var slope = FindFirstObjectByType<LocalSlopeEstimator_v2>(FindObjectsInactive.Exclude);
+#else
+    var slope = FindObjectOfType<LocalSlopeEstimator_v2>();
+#endif
+    float slopePct, crossSlopePct;
+    Vector3 downhill;
+
+    // line direction on XZ for cross-slope calc
+    Vector3 lineDir = (pointB - pointA); lineDir.y = 0f;
+    lineDir = lineDir.sqrMagnitude > 1e-6f ? lineDir.normalized : Vector3.forward;
+
+    if (slope && slope.TryEstimateSlopeAt(mid, lineDir, out slopePct, out crossSlopePct, out downhill))
+    {
+        // Use CROSS-SLOPE for break (component perpendicular to the putt path)
+        float breakInches = distFeet * (crossSlopePct) / 2f;
+
+        UpdateHud(distFeet, slopePct, breakInches); // keep showing total slope% if you want
+
+        if (fallLineRenderer)
         {
-            puttLineRenderer.enabled = true;
-            puttLineRenderer.SetPosition(0, pointA);
-            puttLineRenderer.SetPosition(1, pointB);
-        }
-
-        // Distance
-        float distMeters = Vector3.Distance(pointA, pointB);
-        float distFeet = distMeters * 3.28084f;
-
-        // Slope at midpoint (depth-based plane fit)
-        Vector3 mid = Vector3.Lerp(pointA, pointB, 0.5f);
-        if (TryEstimateSlopeAt(mid, out float slopePct, out Vector3 downhill))
-        {
-            // Break estimate (your formula): inches ≈ distance(ft) * slope% / 2
-            float breakInches = distFeet * (slopePct) / 2f;
-
-            UpdateHud(distFeet, slopePct, breakInches);
-
-            // Show fall line arrow at midpoint
-            if (fallLineRenderer)
-            {
-                fallLineRenderer.enabled = true;
-                fallLineRenderer.SetPosition(0, mid);
-                fallLineRenderer.SetPosition(1, mid + downhill.normalized * fallLineLength);
-            }
-        }
-        else
-        {
-            UpdateHud(distFeet, float.NaN, float.NaN);
-            if (fallLineRenderer) fallLineRenderer.enabled = false;
+            fallLineRenderer.enabled = true;
+            fallLineRenderer.SetPosition(0, mid);
+            fallLineRenderer.SetPosition(1, mid + downhill * fallLineLength);
         }
     }
+    else
+    {
+        UpdateHud(distFeet, float.NaN, float.NaN);
+        if (fallLineRenderer) fallLineRenderer.enabled = false;
+    }
+}
 
     private void UpdateHud(float distFeet, float slopePct, float breakInches)
     {
