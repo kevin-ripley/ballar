@@ -497,10 +497,17 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8870159974457063576, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2405661995043550542, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 907981749}
+    - targetCorrespondingSourceObject: {fileID: 1148979547463004865, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 907981750}
   m_SourcePrefab: {fileID: 100100000, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
 --- !u!120 &907981745 stripped
 LineRenderer:
@@ -512,6 +519,68 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 7232693133763145683, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
   m_PrefabInstance: {fileID: 907981744}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &907981747 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2405661995043550542, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
+  m_PrefabInstance: {fileID: 907981744}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &907981748 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1148979547463004865, guid: b8894fb654be3b846ac4cb21545a65e1, type: 3}
+  m_PrefabInstance: {fileID: 907981744}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &907981749
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 907981747}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83122ff9e131abf44a783c1ea81c55c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_InteractorTransform: {fileID: 0}
+  m_AttachTransform: {fileID: 0}
+  m_RayOriginTransform: {fileID: 0}
+  m_LaserVisual: {fileID: 0}
+  m_Reticle: {fileID: 0}
+  m_TriggerAction:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Trigger
+      m_Type: 0
+      m_ExpectedControlType: 
+      m_Id: 879aefbc-dae6-4d2a-9d21-5c21e9a2bd19
+      m_Processors: 
+      m_Interactions: 
+      m_SingletonActionBindings: []
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_InteractionLayerMask:
+    serializedVersion: 2
+    m_Bits: 1
+  m_MaxRaycastDistance: 10
+--- !u!114 &907981750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 907981748}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 702ee19165ead0a4c87440234a515db6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Laser: {fileID: 0}
+  m_DefaultVisual: {fileID: 0}
+  m_HoverVisual: {fileID: 0}
+  m_ForceHideReticle: 0
+  defaultDistance: 2.5
+  reticleSizeRatio: 0.02
+  m_MainCamera: {fileID: 0}
 --- !u!1 &1279313422
 GameObject:
   m_ObjectHideFlags: 0

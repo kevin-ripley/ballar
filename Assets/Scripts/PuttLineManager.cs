@@ -1,311 +1,419 @@
-// PuttLineManager.cs
+using System.Collections;
 using System.Collections.Generic;
-using TMPro;
+using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using TMPro; // If you use legacy UI.Text, swap types accordingly.
 
 public class PuttLineManager : MonoBehaviour
 {
+    public enum PlacementState { Idle, Sampling, APlaced, BPlaced }
 
-// Add near top:
-[SerializeField] private GreenAnalyzer greenAnalyzer;   // drag your GreenAnalyzer
-[SerializeField] private bool autoAnalyzeBetweenPoints = true;
-[SerializeField] private float analyzePaddingMeters = 0.5f;
-
-
-    [Header("References")]
-    [SerializeField] private Transform rayOrigin;                   // RayOrigin under Right Controller (for fallback casts)
-    [SerializeField] private ControllerReticle reticle;             // Optional: use current reticle hit when selecting
-    [SerializeField] private ARRaycastManager raycastManager;       // Drag from XR Origin
-    [SerializeField] private ballarLaser laser;                     // Optional: subscribe to laser.OnPointSelected(Vector3)
+    [Header("Core Refs")]
+    [SerializeField] private GazeRayProvider gaze;          // Attach from AR Camera
+    [SerializeField] private ARRaycastManager arRaycast;    // On XR Origin
+    [SerializeField] private ARAnchorManager anchorManager; // On XR Origin (optional)
+    [SerializeField] private ARPlaneManager planeManager;   // Optional, not required
 
     [Header("Visuals")]
-    [SerializeField] private GameObject pointMarkerPrefab;          // Shown at A and B
-    [SerializeField] private Transform markerParent;                // Optional parent for markers
-    [SerializeField] private LineRenderer puttLineRenderer;         // Draws A→B
-    [SerializeField] private LineRenderer fallLineRenderer;         // Shows downhill at midpoint (optional)
+    [SerializeField] private LineRenderer puttLine;         // Draws the line A→B (surface polyline)
+    [SerializeField] private Transform markerA;             // Optional: small marker transforms
+    [SerializeField] private Transform markerB;
 
-    [Header("HUD (optional)")]
-    [SerializeField] private TextMeshProUGUI distanceFtText;
-    [SerializeField] private TextMeshProUGUI slopePctText;
-    [SerializeField] private TextMeshProUGUI breakInchesText;
+    [Header("UI")]
+    [SerializeField] private TMP_Text statusText;           // "Sampling A…", errors, etc.
+    [SerializeField] private TMP_Text distanceText;         // "Putt: 10.2 ft"
+    [SerializeField] private TMP_Text slopeText;            // "Slope: 2.1%"
 
-    [Header("Sampling for slope @ midpoint")]
-    [SerializeField] private float sampleRadius = 0.35f;            // meters
-    [SerializeField] private int rings = 2;
-    [SerializeField] private int samplesPerRing = 12;
-    [SerializeField] private float overhead = 0.5f;                 // cast straight down from above
-    [SerializeField] private TrackableType trackables =
-        TrackableType.PlaneWithinPolygon | TrackableType.PlaneEstimated |
-        TrackableType.FeaturePoint | TrackableType.Depth;
-    [SerializeField] private bool usePhysicsFallback = true;
-    [SerializeField] private LayerMask physicsMask = ~0;
+    [Header("Sampling & Filters")]
+    [Tooltip("Seconds to dwell while collecting head-gaze hits")]
+    [SerializeField] private float sampleSeconds = 0.4f;
+    [SerializeField] private LayerMask physicsMask = ~0;    // Physics fallback layers
 
-    [Header("Putt line width (meters)")]
-    [SerializeField] private float puttLineWidth = 0.01f;
-    [SerializeField] private float fallLineWidth = 0.01f;
-    [SerializeField] private float fallLineLength = 0.5f;
+    [Header("Polyline & Units")]
+    [SerializeField] private int lineSteps = 24;            // Segments for surface polyline
+    [SerializeField] private bool useFeet = true;           // UI distance units
 
-    // Internal state
-    private bool hasA, hasB;
-    private Vector3 pointA, pointB;
-    private GameObject markerA, markerB;
-    private readonly List<ARRaycastHit> _hits = new();
+    [SerializeField] private float minSamplesRequired = 6; // was implicitly 8
 
-    void Awake()
+    // Internal
+    private readonly List<ARRaycastHit> _arHits = new();
+    private ARAnchor anchorA, anchorB;
+    private Vector3 pointA, pointB;                         // Raw points if no anchors
+    public PlacementState currentState { get; private set; } = PlacementState.Idle;
+
+    // Store last AR raycast hit during sampling (useful if you later want plane-attach)
+    private ARRaycastHit? _lastArHitDuringSample = null;
+
+    #region Public entry points (hook to buttons or input)
+    public void BeginPlaceA()
     {
-        if (!raycastManager)
+        if (currentState == PlacementState.Idle ||
+            currentState == PlacementState.APlaced ||
+            currentState == PlacementState.BPlaced)
         {
-#if UNITY_6000_0_OR_NEWER || UNITY_2023_1_OR_NEWER
-            raycastManager = FindFirstObjectByType<ARRaycastManager>(FindObjectsInactive.Exclude);
-#else
-            raycastManager = FindObjectOfType<ARRaycastManager>();
-#endif
-        }
-
-        // Set up line renderers safely
-        if (puttLineRenderer)
-        {
-            puttLineRenderer.useWorldSpace = true;
-            puttLineRenderer.positionCount = 2;
-            puttLineRenderer.startWidth = puttLineWidth;
-            puttLineRenderer.endWidth = puttLineWidth;
-            puttLineRenderer.enabled = false;
-        }
-        if (fallLineRenderer)
-        {
-            fallLineRenderer.useWorldSpace = true;
-            fallLineRenderer.positionCount = 2;
-            fallLineRenderer.startWidth = fallLineWidth;
-            fallLineRenderer.endWidth = fallLineWidth;
-            fallLineRenderer.enabled = false;
+            StartCoroutine(GetPrecisePoint(true));
         }
     }
 
-    void OnEnable()
+    public void BeginPlaceB()
     {
-        if (laser != null)
-            laser.OnPointSelected.AddListener(HandlePointSelectedFromLaser);
-    }
-
-    void OnDisable()
-    {
-        if (laser != null)
-            laser.OnPointSelected.RemoveListener(HandlePointSelectedFromLaser);
-    }
-
-    // If you're not using ballarLaser events, you can hook this to your input:
-    public void SelectPoint()
-    {
-        // Prefer the reticle hit pose if available
-        if (reticle && reticle.HasHit)
-        {
-            HandlePointSelected(reticle.HitPose.position);
-            return;
-        }
-
-        // Fallback: cast a ray from the controller forward
-        if (!rayOrigin || !raycastManager) return;
-        var ray = new Ray(rayOrigin.position, rayOrigin.forward);
-
-        if (raycastManager.Raycast(ray, _hits, trackables))
-            HandlePointSelected(_hits[0].pose.position);
-        else if (usePhysicsFallback && Physics.Raycast(ray, out var phit, 20f, physicsMask))
-            HandlePointSelected(phit.point);
-    }
-
-    private void HandlePointSelectedFromLaser(Vector3 worldPos) => HandlePointSelected(worldPos);
-
-    private void HandlePointSelected(Vector3 worldPos)
-    {
-        if (!hasA)
-        {
-            pointA = worldPos;
-            hasA = true;
-            SpawnOrMoveMarker(ref markerA, pointA);
-            ClearLineOnly();
-            return;
-        }
-
-        if (!hasB)
-        {
-            pointB = worldPos;
-            hasB = true;
-            SpawnOrMoveMarker(ref markerB, pointB);
-            DrawAndCompute();
-            return;
-        }
-
-        // Third selection: start a new pair (treat selection as new A)
-        ResetAll();
-        pointA = worldPos;
-        hasA = true;
-        SpawnOrMoveMarker(ref markerA, pointA);
-    }
-
-    private void DrawAndCompute()
-    {
-        if (!hasA || !hasB) return;
-
-        if (puttLineRenderer)
-        {
-            puttLineRenderer.enabled = true;
-            puttLineRenderer.SetPosition(0, pointA);
-            puttLineRenderer.SetPosition(1, pointB);
-        }
-
-        float distMeters = Vector3.Distance(pointA, pointB);
-        float distFeet = distMeters * 3.28084f;
-
-        Vector3 mid = Vector3.Lerp(pointA, pointB, 0.5f);
-
-        // NEW: use LocalSlopeEstimator (drag it into this script or FindFirstObjectByType)
-#if UNITY_6000_0_OR_NEWER || UNITY_2023_1_OR_NEWER
-        var slope = FindFirstObjectByType<LocalSlopeEstimator>(FindObjectsInactive.Exclude);
-#else
-    var slope = FindObjectOfType<LocalSlopeEstimator>();
-#endif
-        float slopePct, crossSlopePct;
-        Vector3 downhill;
-
-        // line direction on XZ for cross-slope calc
-        Vector3 lineDir = (pointB - pointA); lineDir.y = 0f;
-        lineDir = lineDir.sqrMagnitude > 1e-6f ? lineDir.normalized : Vector3.forward;
-
-        if (slope && slope.TryEstimateSlopeAt(mid, lineDir, out slopePct, out crossSlopePct, out downhill))
-        {
-            // Use CROSS-SLOPE for break (component perpendicular to the putt path)
-            float breakInches = distFeet * (crossSlopePct) / 2f;
-
-            UpdateHud(distFeet, slopePct, breakInches); // keep showing total slope% if you want
-
-            if (fallLineRenderer)
-            {
-                fallLineRenderer.enabled = true;
-                fallLineRenderer.SetPosition(0, mid);
-                fallLineRenderer.SetPosition(1, mid + downhill * fallLineLength);
-            }
-        }
-        else
-        {
-            UpdateHud(distFeet, float.NaN, float.NaN);
-            if (fallLineRenderer) fallLineRenderer.enabled = false;
-        }
-    // In DrawAndCompute(), after drawing and HUD updates, append:
-if (autoAnalyzeBetweenPoints && greenAnalyzer != null)
-{
-    greenAnalyzer.AnalyzeBetweenPoints(pointA, pointB, analyzePaddingMeters);
-}
-
-}
-
-    private void UpdateHud(float distFeet, float slopePct, float breakInches)
-    {
-        if (distanceFtText)
-            distanceFtText.text = $"{distFeet:0.0} ft";
-
-        if (slopePctText)
-            slopePctText.text = float.IsNaN(slopePct) ? "-- %" : $"{slopePct:0.0}%";
-
-        if (breakInchesText)
-            breakInchesText.text = float.IsNaN(breakInches) ? "-- in" : $"{breakInches:0.0} in";
-    }
-
-    private void SpawnOrMoveMarker(ref GameObject marker, Vector3 pos)
-    {
-        if (!pointMarkerPrefab) return;
-        if (marker == null)
-            marker = Instantiate(pointMarkerPrefab, pos, Quaternion.identity, markerParent);
-        else
-            marker.transform.SetPositionAndRotation(pos, Quaternion.identity);
-    }
-
-    public void ClearLineOnly()
-    {
-        if (puttLineRenderer) puttLineRenderer.enabled = false;
-        if (fallLineRenderer) fallLineRenderer.enabled = false;
-        if (distanceFtText) distanceFtText.text = "";
-        if (slopePctText) slopePctText.text = "";
-        if (breakInchesText) breakInchesText.text = "";
+        if (currentState == PlacementState.APlaced)
+            StartCoroutine(GetPrecisePoint(false));
     }
 
     public void ResetAll()
     {
-        hasA = hasB = false;
-        ClearLineOnly();
+        currentState = PlacementState.Idle;
 
-        if (markerA) Destroy(markerA);
-        if (markerB) Destroy(markerB);
-        markerA = markerB = null;
+        if (anchorA) Destroy(anchorA.gameObject); anchorA = null;
+        if (anchorB) Destroy(anchorB.gameObject); anchorB = null;
+
+        pointA = pointB = Vector3.zero;
+
+        if (markerA) markerA.gameObject.SetActive(false);
+        if (markerB) markerB.gameObject.SetActive(false);
+
+        if (puttLine) { puttLine.positionCount = 0; }
+
+        SetStatus("Tap A to start.");
+        SetHUD("", "");
+    }
+    #endregion
+
+    private void Awake()
+    {
+        if (!puttLine)
+        {
+            // Create a simple line renderer if not assigned
+            var lr = gameObject.AddComponent<LineRenderer>();
+            lr.widthMultiplier = 0.01f;
+            lr.useWorldSpace = true;
+            lr.positionCount = 0;
+            puttLine = lr;
+        }
     }
 
-    // ---- Local plane fit around 'center' using AR depth/planes + optional physics ----
-    private bool TryEstimateSlopeAt(Vector3 center, out float slopePercent, out Vector3 downhillDir)
+    private void Start()
     {
-        slopePercent = 0f;
-        downhillDir = Vector3.zero;
+        if (markerA) markerA.gameObject.SetActive(false);
+        if (markerB) markerB.gameObject.SetActive(false);
+        SetStatus("Tap A to start.");
+    }
 
-        if (!raycastManager) return false;
+    private void SetStatus(string msg) { if (statusText) statusText.text = msg; }
+    private void SetHUD(string dist, string slope)
+    {
+        if (distanceText) distanceText.text = dist;
+        if (slopeText) slopeText.text = slope;
+    }
 
-        // Gather samples on a horizontal disc around the center by casting down from above
-        var pts = new List<Vector3>(1 + rings * samplesPerRing) { center };
+    // ==========================
+    // Sampling with head-gaze
+    // ==========================
+    private IEnumerator GetPrecisePoint(bool isPointA)
+    {
+        currentState = PlacementState.Sampling;
+        SetStatus(isPointA ? "Sampling A (gaze)…" : "Sampling B (gaze)…");
 
-        for (int r = 1; r <= rings; r++)
+        var pts = new List<Vector3>(128);
+        var ups = new List<Vector3>(128);
+        _lastArHitDuringSample = null;
+
+        float tEnd = Time.time + sampleSeconds;
+        while (Time.time < tEnd)
         {
-            float rad = (sampleRadius * r) / rings;
-            for (int i = 0; i < samplesPerRing; i++)
-            {
-                float ang = (i / (float)samplesPerRing) * Mathf.PI * 2f;
-                var offsetXZ = new Vector3(Mathf.Cos(ang) * rad, 0f, Mathf.Sin(ang) * rad);
-                var castFrom = center + Vector3.up * overhead + offsetXZ;
-                var ray = new Ray(castFrom, Vector3.down);
+            // Head-gaze ray
+            var cam = gaze ? gaze.GetRay() : new Ray(Camera.main.transform.position, Camera.main.transform.forward);
 
-                if (raycastManager.Raycast(ray, _hits, trackables))
-                    pts.Add(_hits[0].pose.position);
-                else if (usePhysicsFallback && Physics.Raycast(ray, out var phit, overhead + 1.0f, physicsMask))
-                    pts.Add(phit.point);
+            if (TryARRaycast(cam, out ARRaycastHit arHit, out Vector3 hitPos, out Vector3 hitUp))
+            {
+                if (Vector3.Dot(hitUp, Vector3.up) >= 0.6f)
+                {
+                    pts.Add(hitPos);
+                    ups.Add(hitUp.normalized);
+                    _lastArHitDuringSample = arHit;
+                }
+            }
+            else if (Physics.SphereCast(cam, 0.01f, out var h, 20f, physicsMask))
+            {
+                if (Vector3.Dot(h.normal, Vector3.up) >= 0.6f)
+                {
+                    pts.Add(h.point);
+                    ups.Add(h.normal.normalized);
+                }
+            }
+            yield return null; // frame
+        }
+
+        if (pts.Count < minSamplesRequired)
+        {
+            SetStatus("Not enough samples — try again.");
+            currentState = PlacementState.Idle; yield break;
+        }
+
+        // --- Outlier rejection (MAD) ---
+        Vector3 med = MedianVector(pts);
+        float[] dist = new float[pts.Count];
+        for (int i = 0; i < pts.Count; i++) dist[i] = (pts[i] - med).magnitude;
+        float mad = MedianScalar(dist);
+        float gate = Mathf.Max(0.01f, 2.5f * mad);
+
+        var keptIdx = new List<int>(pts.Count);
+        for (int i = 0; i < pts.Count; i++) if (dist[i] <= gate) keptIdx.Add(i);
+
+        Vector3 centroid = Vector3.zero;
+        Vector3 nSum = Vector3.zero;
+        for (int k = 0; k < keptIdx.Count; k++)
+        {
+            int i = keptIdx[k];
+            centroid += pts[i];
+            nSum     += ups[i];
+        }
+        centroid /= Mathf.Max(1, keptIdx.Count);
+        Vector3 n = nSum.sqrMagnitude > 1e-8f ? nSum.normalized : Vector3.up;
+
+        // Vertical re-project
+        Plane plane = new Plane(n, centroid);
+        Ray vRay = new Ray(centroid + Vector3.up * 0.5f, Vector3.down);
+        if (!plane.Raycast(vRay, out float enter))
+        {
+            SetStatus("Plane miss — try again.");
+            currentState = PlacementState.Idle; yield break;
+        }
+        Vector3 precise = vRay.GetPoint(enter);
+
+        OnPointPlaced(isPointA, precise);
+    }
+
+    private void OnPointPlaced(bool isA, Vector3 pos)
+    {
+        // Anchoring (AF 6.x: AddAnchor removed; use AddComponent<ARAnchor>())
+        if (anchorManager)
+        {
+            var go = new GameObject(isA ? "AnchorA" : "AnchorB");
+            go.transform.SetParent(anchorManager.transform, worldPositionStays: true);
+            go.transform.SetPositionAndRotation(pos, Quaternion.identity);
+
+            var a = go.AddComponent<ARAnchor>(); // may disable itself if provider can't create one
+            if (a == null || !go.activeInHierarchy)
+            {
+                Debug.LogWarning("Failed to create ARAnchor; falling back to raw position.");
+                Destroy(go);
+                if (isA) pointA = pos; else pointB = pos;
+            }
+            else
+            {
+                if (isA) { if (anchorA) Destroy(anchorA.gameObject); anchorA = a; pointA = pos; }
+                else     { if (anchorB) Destroy(anchorB.gameObject); anchorB = a; pointB = pos; }
+            }
+        }
+        else
+        {
+            if (isA) pointA = pos; else pointB = pos;
+        }
+
+        if (isA)
+        {
+            currentState = PlacementState.APlaced;
+            if (markerA) { markerA.position = pos; markerA.gameObject.SetActive(true); }
+            SetStatus("Tap B to place end point.");
+        }
+        else
+        {
+            currentState = PlacementState.BPlaced;
+            if (markerB) { markerB.position = pos; markerB.gameObject.SetActive(true); }
+            BuildAndShowLine();
+            UpdateMeasurementsUI();
+            SetStatus("A/B placed — tap A or Reset to re-measure.");
+        }
+    }
+
+    private void BuildAndShowLine()
+    {
+        Vector3 a = anchorA ? anchorA.transform.position : pointA;
+        Vector3 b = anchorB ? anchorB.transform.position : pointB;
+        if (lineSteps < 2) lineSteps = 2;
+
+        var pts = BuildSurfacePolylinePoints(a, b, lineSteps);
+        if (pts.Count >= 2)
+        {
+            puttLine.positionCount = pts.Count;
+            puttLine.SetPositions(pts.ToArray());
+        }
+    }
+
+    private void UpdateMeasurementsUI()
+    {
+        Vector3 a = anchorA ? anchorA.transform.position : pointA;
+        Vector3 b = anchorB ? anchorB.transform.position : pointB;
+
+        var (slopePct, horizontalRun) = SlopeAlongAB(a, b, nineSamples: 9);
+        float surf = SurfaceDistance(a, b, steps: 24);
+
+        string distStr = useFeet ? $"Putt: {(surf * 3.28084f):0.0} ft" : $"Putt: {surf:0.00} m";
+        string slopeStr = $"Slope: {slopePct:0.0}%";
+        SetHUD(distStr, slopeStr);
+    }
+
+    // ==========================
+    // Core math helpers
+    // ==========================
+    private (float slopePct, float horizRun) SlopeAlongAB(Vector3 a, Vector3 b, int nineSamples)
+    {
+        Vector3 aH = new Vector3(a.x, 0, a.z);
+        Vector3 bH = new Vector3(b.x, 0, b.z);
+        float L = Vector3.Distance(aH, bH);
+        if (L < 1e-3f) return (0f, 0f);
+
+        int M = Mathf.Max(3, nineSamples);
+        var xs = new List<float>(M);
+        var ys = new List<float>(M);
+        for (int i = 0; i < M; i++)
+        {
+            float t = (M == 1) ? 0f : i / (float)(M - 1);
+            Vector3 pH = Vector3.Lerp(aH, bH, t);
+            Vector3 start = new Vector3(pH.x, Mathf.Max(a.y, b.y) + 0.6f, pH.z);
+
+            if (TryARRaycast(new Ray(start, Vector3.down), out _, out Vector3 hitPos, out _))
+            {
+                xs.Add(t * L);
+                ys.Add(hitPos.y);
+            }
+            else if (Physics.Raycast(start, Vector3.down, out var h, 5f, physicsMask))
+            {
+                xs.Add(t * L);
+                ys.Add(h.point.y);
             }
         }
 
-        if (pts.Count < 6) return false;
+        if (xs.Count < 3) return (0f, L);
 
-        // Fit plane: y = a*x + b*z + c  (world Y up)
-        double Suu=0, Suv=0, Su=0, Svv=0, Sv=0, S1=pts.Count;
-        double Suw=0, Svw=0, Sw=0;
-
-        for (int i = 0; i < pts.Count; i++)
-        {
-            var p = pts[i];
-            double u = p.x, v = p.z, w = p.y;
-            Suu += u*u;  Suv += u*v;  Su  += u;
-            Svv += v*v;  Sv  += v;    Sw  += w;
-            Suw += u*w;  Svw += v*w;
-        }
-
-        if (!Solve3x3(Suu, Suv, Su,  Suv, Svv, Sv,  Su, Sv, S1,  Suw, Svw, Sw, out double a, out double b, out _))
-            return false;
-
-        float m = Mathf.Sqrt((float)(a*a + b*b));    // rise/run
-        slopePercent = m * 100f;
-
-        downhillDir = new Vector3(-(float)a, 0f, -(float)b).normalized;
-        return true;
+        float xbar = 0f, ybar = 0f; for (int i = 0; i < xs.Count; i++) { xbar += xs[i]; ybar += ys[i]; }
+        xbar /= xs.Count; ybar /= xs.Count;
+        float num = 0f, den = 0f;
+        for (int i = 0; i < xs.Count; i++) { float dx = xs[i] - xbar; num += dx * (ys[i] - ybar); den += dx * dx; }
+        float dy_dx = (den > 1e-6f) ? num / den : 0f;
+        return (dy_dx * 100f, L);
     }
 
-    private static bool Solve3x3(double a11,double a12,double a13, double a21,double a22,double a23,
-                                 double a31,double a32,double a33, double b1,double b2,double b3,
-                                 out double x1, out double x2, out double x3)
+    private float SurfaceDistance(Vector3 a, Vector3 b, int steps)
     {
-        double det = a11*(a22*a33 - a23*a32) - a12*(a21*a33 - a23*a31) + a13*(a21*a32 - a22*a31);
-        if (Mathf.Abs((float)det) < 1e-8f) { x1=x2=x3=0; return false; }
+        var pts = BuildSurfacePolylinePoints(a, b, Mathf.Max(2, steps));
+        float sum = 0f;
+        for (int i = 1; i < pts.Count; i++) sum += Vector3.Distance(pts[i - 1], pts[i]);
+        return sum;
+    }
 
-        double det1 = b1*(a22*a33 - a23*a32) - a12*(b2*a33 - a23*b3) + a13*(b2*a32 - a22*b3);
-        double det2 = a11*(b2*a33 - a23*b3) - b1*(a21*a33 - a23*a31) + a13*(a21*b3 - b2*a31);
-        double det3 = a11*(a22*b3 - b2*a32) - a12*(a21*b3 - b2*a31) + b1*(a21*a32 - a22*a31);
+    private List<Vector3> BuildSurfacePolylinePoints(Vector3 a, Vector3 b, int steps)
+    {
+        var list = new List<Vector3>(steps + 1);
+        list.Add(ProjectDown(a, a, b));
+        Vector3 aH = new Vector3(a.x, 0, a.z);
+        Vector3 bH = new Vector3(b.x, 0, b.z);
+        for (int i = 1; i < steps; i++)
+        {
+            float t = i / (float)steps;
+            Vector3 pH = Vector3.Lerp(aH, bH, t);
+            Vector3 start = new Vector3(pH.x, Mathf.Max(a.y, b.y) + 0.6f, pH.z);
+            list.Add(ProjectDown(start, a, b));
+        }
+        list.Add(ProjectDown(b, a, b));
+        return list;
+    }
 
-        x1 = det1 / det; x2 = det2 / det; x3 = det3 / det;
+    private Vector3 ProjectDown(Vector3 start, Vector3 a, Vector3 b)
+    {
+        if (TryARRaycast(new Ray(start + Vector3.up * 0.01f, Vector3.down), out _, out Vector3 hitPos, out _)) return hitPos;
+        if (Physics.Raycast(start + Vector3.up * 0.01f, Vector3.down, out var h, 5f, physicsMask)) return h.point;
+        // Fallback: linear height interpolation (rare)
+        float t = HorizontalT(start, a, b);
+        return new Vector3(start.x, Mathf.Lerp(a.y, b.y, t), start.z);
+    }
+
+    private float HorizontalT(Vector3 p, Vector3 a, Vector3 b)
+    {
+        Vector3 aH = new Vector3(a.x, 0, a.z);
+        Vector3 bH = new Vector3(b.x, 0, b.z);
+        Vector3 pH = new Vector3(p.x, 0, p.z);
+        float L = Vector3.Distance(aH, bH);
+        if (L < 1e-4f) return 0f;
+        float t = Vector3.Dot(pH - aH, (bH - aH).normalized) / L;
+        return Mathf.Clamp01(t);
+    }
+
+    // ==========================
+    // Raycast helper (AR-first)
+    // ==========================
+    // private bool TryARRaycast(Ray worldRay, out ARRaycastHit arHit, out Vector3 hitPos, out Vector3 hitUp)
+    // {
+    //     arHit = default;
+    //     hitPos = default; hitUp = Vector3.up;
+    //     if (arRaycast &&
+    //         arRaycast.Raycast(worldRay, _arHits,
+    //             TrackableType.PlaneWithinPolygon |
+    //             TrackableType.FeaturePoint |
+    //             TrackableType.Depth))
+    //     {
+    //         var h = _arHits[0];
+    //         arHit  = h;
+    //         hitPos = h.pose.position; hitUp = h.pose.up;
+    //         if (Vector3.Dot(hitUp, Vector3.up) >= 0.75f) return true; // reject walls
+    //     }
+    //     return false;
+    // }
+
+
+    //UPDATED LOOSER RAYCAST HELPER
+
+    private bool TryARRaycast(Ray worldRay, out ARRaycastHit arHit, out Vector3 hitPos, out Vector3 hitUp)
+{
+    arHit = default;
+    hitPos = default; hitUp = Vector3.up;
+
+    if (arRaycast &&
+        arRaycast.Raycast(worldRay, _arHits,
+            TrackableType.PlaneWithinPolygon |
+            TrackableType.FeaturePoint |
+            TrackableType.Depth))
+    {
+        var h = _arHits[0];
+        arHit  = h;
+        hitPos = h.pose.position;
+
+        // If it's a plane, use plane up. Otherwise (feature/depth), don't over-filter.
+        bool planeHit = (h.hitType & TrackableType.PlaneWithinPolygon) != 0;
+        hitUp = planeHit ? h.pose.up : Vector3.up;
+
+        if (planeHit)
+        {
+            // Relaxed wall rejection
+            if (Vector3.Dot(hitUp, Vector3.up) < 0.5f) return false;
+        }
         return true;
+    }
+    return false;
+}
+
+    // ==========================
+    // Median helpers for MAD gate
+    // ==========================
+    private static Vector3 MedianVector(List<Vector3> a)
+    {
+        return new Vector3(MedianScalar(a, v => v.x), MedianScalar(a, v => v.y), MedianScalar(a, v => v.z));
+    }
+    private static float MedianScalar(List<Vector3> a, System.Func<Vector3, float> sel)
+    {
+        var tmp = new List<float>(a.Count);
+        for (int i = 0; i < a.Count; i++) tmp.Add(sel(a[i]));
+        tmp.Sort();
+        int m = tmp.Count >> 1; return (tmp.Count % 2 == 1) ? tmp[m] : 0.5f * (tmp[m - 1] + tmp[m]);
+    }
+    private static float MedianScalar(float[] arr)
+    {
+        var tmp = new List<float>(arr);
+        tmp.Sort();
+        int m = tmp.Count >> 1; return (tmp.Count % 2 == 1) ? tmp[m] : 0.5f * (tmp[m - 1] + tmp[m]);
     }
 }

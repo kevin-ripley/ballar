@@ -3465,6 +3465,34 @@
                     "isPartOfComposite": true
                 }
             ]
+        },
+        {
+            "name": "PointPlaceAction Map",
+            "id": "75640612-cf04-47db-8dfc-441f9acee7f5",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "dda3b04b-a1d2-4666-8bbe-9c2b60f13163",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "4b562011-a8e4-4321-b8cd-1d41c1be7b5c",
+                    "path": "<XREALController>/ButtonId0",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
         }
     ],
     "controlSchemes": []
