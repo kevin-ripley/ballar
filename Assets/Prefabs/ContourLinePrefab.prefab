@@ -56,7 +56,7 @@ LineRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d01d0d7a3971fa247a782e67553972f6, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -78,11 +78,11 @@ LineRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_Positions:
-  - {x: 0, y: 0, z: 0}
-  - {x: 0, y: 0, z: 1}
+  - {x: 0, y: 1.36144, z: 0}
+  - {x: 1.1350722, y: 7.923207, z: 2.1897302}
   m_Parameters:
     serializedVersion: 3
-    widthMultiplier: 0.0021125914
+    widthMultiplier: 0.0025
     widthCurve:
       serializedVersion: 2
       m_Curve:

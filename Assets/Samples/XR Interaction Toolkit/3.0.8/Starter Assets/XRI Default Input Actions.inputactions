@@ -3493,6 +3493,230 @@
                     "isPartOfComposite": false
                 }
             ]
+        },
+        {
+            "name": "PlaceHole",
+            "id": "c1631edb-2831-4b02-af94-69e552c6be53",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "034c5b14-dde9-4329-8007-f4e73b89af3c",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "71eaac57-ae2c-4a2c-bead-ab8bc76cba2b",
+                    "path": "<XREALController>/ButtonId1",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "AddBoundary",
+            "id": "052160d4-f3d5-4503-88dd-46d8539313fe",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "eb999493-c0b7-4ac0-9929-156811878bb9",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "05f0a75a-2dd7-4ce8-9ba9-58c73a889b60",
+                    "path": "<XREALController>/ButtonId2",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "FinishBoundary",
+            "id": "33b0592a-97a3-42a3-bd4d-a76ae822bf2d",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "1be11495-9533-49b6-8bd1-b302e1abb575",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "a63e542e-4caf-46c6-bc0f-41b0e702667c",
+                    "path": "<XREALController>/ButtonId3",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "ClearBounds",
+            "id": "fb0801d4-1d78-4e2b-8d54-9b9948a1c6ed",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "5f03a32f-6d5f-494e-b772-40e1fb02ce75",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "5f830793-7cc0-4415-a5d0-677394dc7ea8",
+                    "path": "<XREALController>/ButtonId4",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "ToggleHighlight",
+            "id": "e8c7c813-8541-42c8-8cd6-dc22d7b87eeb",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "9a06d7bc-cf26-4aaa-a491-392ded07691f",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "0c5e71ec-d7cb-402e-af43-e50c7e346c15",
+                    "path": "<XREALController>/ButtonId5",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "ThresholdUp",
+            "id": "97ee98f7-1626-49fd-98f1-3ec80ffcc070",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "43437597-7d7e-4f06-8bf2-178f25b976a6",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "a6e3faee-e3d1-4674-bd23-45a7248b138c",
+                    "path": "<XREALController>/ButtonId6",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "ThresholdDown",
+            "id": "decf0363-27f6-4275-b1e5-0e39f33e6430",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "269bca05-88c8-4ddc-b616-d6319733bddc",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "8905e5ce-1aa8-410f-96cd-e009323c9be9",
+                    "path": "<XREALController>/ButtonId7",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "ThresholdReset",
+            "id": "a3874f17-b959-4723-a601-c21c529e0703",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "fd2ff151-2f2b-446f-8858-cd8c4144e44a",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "2f679e38-d2d3-4454-94df-de8ca94a10b6",
+                    "path": "<XREALController>/ButtonId8",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
         }
     ],
     "controlSchemes": []

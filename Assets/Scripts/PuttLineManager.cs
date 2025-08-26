@@ -46,6 +46,9 @@ public class PuttLineManager : MonoBehaviour
     // Store last AR raycast hit during sampling (useful if you later want plane-attach)
     private ARRaycastHit? _lastArHitDuringSample = null;
 
+    // AI Integration
+    private SmartRaycastManager smartRaycast;
+
     #region Public entry points (hook to buttons or input)
     public void BeginPlaceA()
     {
@@ -99,6 +102,10 @@ public class PuttLineManager : MonoBehaviour
     {
         if (markerA) markerA.gameObject.SetActive(false);
         if (markerB) markerB.gameObject.SetActive(false);
+        
+        // Get reference to AI manager
+        smartRaycast = SmartRaycastManager.Instance;
+        
         SetStatus("Tap A to start.");
     }
 
@@ -149,7 +156,7 @@ public class PuttLineManager : MonoBehaviour
 
         if (pts.Count < minSamplesRequired)
         {
-            SetStatus("Not enough samples — try again.");
+            SetStatus("Not enough samples – try again.");
             currentState = PlacementState.Idle; yield break;
         }
 
@@ -179,7 +186,7 @@ public class PuttLineManager : MonoBehaviour
         Ray vRay = new Ray(centroid + Vector3.up * 0.5f, Vector3.down);
         if (!plane.Raycast(vRay, out float enter))
         {
-            SetStatus("Plane miss — try again.");
+            SetStatus("Plane miss – try again.");
             currentState = PlacementState.Idle; yield break;
         }
         Vector3 precise = vRay.GetPoint(enter);
@@ -226,7 +233,7 @@ public class PuttLineManager : MonoBehaviour
             if (markerB) { markerB.position = pos; markerB.gameObject.SetActive(true); }
             BuildAndShowLine();
             UpdateMeasurementsUI();
-            SetStatus("A/B placed — tap A or Reset to re-measure.");
+            SetStatus("A/B placed – tap A or Reset to re-measure.");
         }
     }
 
@@ -344,57 +351,59 @@ public class PuttLineManager : MonoBehaviour
     }
 
     // ==========================
-    // Raycast helper (AR-first)
+    // Raycast helper (AR-first) - AI OPTIMIZED
     // ==========================
-    // private bool TryARRaycast(Ray worldRay, out ARRaycastHit arHit, out Vector3 hitPos, out Vector3 hitUp)
-    // {
-    //     arHit = default;
-    //     hitPos = default; hitUp = Vector3.up;
-    //     if (arRaycast &&
-    //         arRaycast.Raycast(worldRay, _arHits,
-    //             TrackableType.PlaneWithinPolygon |
-    //             TrackableType.FeaturePoint |
-    //             TrackableType.Depth))
-    //     {
-    //         var h = _arHits[0];
-    //         arHit  = h;
-    //         hitPos = h.pose.position; hitUp = h.pose.up;
-    //         if (Vector3.Dot(hitUp, Vector3.up) >= 0.75f) return true; // reject walls
-    //     }
-    //     return false;
-    // }
-
-
-    //UPDATED LOOSER RAYCAST HELPER
-
     private bool TryARRaycast(Ray worldRay, out ARRaycastHit arHit, out Vector3 hitPos, out Vector3 hitUp)
-{
-    arHit = default;
-    hitPos = default; hitUp = Vector3.up;
-
-    if (arRaycast &&
-        arRaycast.Raycast(worldRay, _arHits,
-            TrackableType.PlaneWithinPolygon |
-            TrackableType.FeaturePoint |
-            TrackableType.Depth))
     {
-        var h = _arHits[0];
-        arHit  = h;
-        hitPos = h.pose.position;
+        arHit = default;
+        hitPos = default;
+        hitUp = Vector3.up;
 
-        // If it's a plane, use plane up. Otherwise (feature/depth), don't over-filter.
-        bool planeHit = (h.hitType & TrackableType.PlaneWithinPolygon) != 0;
-        hitUp = planeHit ? h.pose.up : Vector3.up;
-
-        if (planeHit)
+        // Use AI-optimized raycast if available
+        if (smartRaycast != null)
         {
-            // Relaxed wall rejection
-            if (Vector3.Dot(hitUp, Vector3.up) < 0.5f) return false;
+            if (smartRaycast.SmartRaycast(worldRay, out arHit,
+                TrackableType.PlaneWithinPolygon | TrackableType.FeaturePoint | TrackableType.Depth))
+            {
+                hitPos = arHit.pose.position;
+
+                // If it's a plane, use plane up. Otherwise (feature/depth), don't over-filter.
+                bool planeHit = (arHit.hitType & TrackableType.PlaneWithinPolygon) != 0;
+                hitUp = planeHit ? arHit.pose.up : Vector3.up;
+
+                if (planeHit)
+                {
+                    // Relaxed wall rejection
+                    if (Vector3.Dot(hitUp, Vector3.up) < 0.5f) return false;
+                }
+                return true;
+            }
         }
-        return true;
+        // Fallback to direct AR raycast if AI system unavailable
+        else if (arRaycast &&
+            arRaycast.Raycast(worldRay, _arHits,
+                TrackableType.PlaneWithinPolygon |
+                TrackableType.FeaturePoint |
+                TrackableType.Depth))
+        {
+            var h = _arHits[0];
+            arHit = h;
+            hitPos = h.pose.position;
+            hitUp = h.pose.up;
+
+            // If it's a plane, use plane up. Otherwise (feature/depth), don't over-filter.
+            bool planeHit = (h.hitType & TrackableType.PlaneWithinPolygon) != 0;
+            hitUp = planeHit ? h.pose.up : Vector3.up;
+
+            if (planeHit)
+            {
+                // Relaxed wall rejection
+                if (Vector3.Dot(hitUp, Vector3.up) < 0.5f) return false;
+            }
+            return true;
+        }
+        return false;
     }
-    return false;
-}
 
     // ==========================
     // Median helpers for MAD gate

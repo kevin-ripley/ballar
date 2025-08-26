@@ -69,6 +69,11 @@ providers = {
 objectSelectors = {
 }
 recentSearches = [
+	"threshold"
+	"thresho"
+	"toggle"
+	"finish"
+	"addboun"
 	"selec"
 	"Right select"
 	"RightH"

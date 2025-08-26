@@ -32,13 +32,21 @@ public class GazeReticle : MonoBehaviour
     public float maxSize = 0.06f;
 
     [Header("Smoothing")]
-    [Range(0f,1f)] public float positionSmoothing = 0.2f;
-    [Range(0f,1f)] public float rotationSmoothing = 0.2f;
+    [Range(0f, 1f)] public float positionSmoothing = 0.2f;
+    [Range(0f, 1f)] public float rotationSmoothing = 0.2f;
 
     [Header("Colors")]
-    public Color validColor    = new Color(0.1f, 1f, 0.4f, 0.9f);
-    public Color invalidColor  = new Color(1f, 0.3f, 0.3f, 0.9f);
+    public Color validColor = new Color(0.1f, 1f, 0.4f, 0.9f);
+    public Color invalidColor = new Color(1f, 0.3f, 0.3f, 0.9f);
     public Color samplingColor = new Color(1f, 0.85f, 0.2f, 1f);
+
+    [Header("Green Slope Integration (optional)")]
+    public GreenSlopeManager greenSlope;     // assign in GreenSlopeScene
+    public bool showBoundaryPreview = true;
+    public LineRenderer previewLine;         // auto-created if null when preview enabled
+    public Color holeModeColor = new Color(0.2f, 0.8f, 1f, 1f);  // cyan-ish while placing HOLE
+    public Color boundaryModeColor = new Color(1f, 0.45f, 0.1f, 1f); // orange while adding BOUNDARY
+
 
     private readonly List<ARRaycastHit> _hits = new();
     private Vector3 _fPos;
@@ -109,6 +117,17 @@ public class GazeReticle : MonoBehaviour
         {
             debugLine.enabled = false;
         }
+
+        if (showBoundaryPreview && !previewLine)
+        {
+            previewLine = gameObject.AddComponent<LineRenderer>();
+            previewLine.positionCount = 2;
+            previewLine.useWorldSpace = true;
+            previewLine.widthMultiplier = 0.008f;
+            // Use a known-good material (reuse lineMaterialOverride if you have it)
+            if (lineMaterialOverride) previewLine.material = new Material(lineMaterialOverride);
+            previewLine.enabled = false;
+        }
     }
 
     void LateUpdate()
@@ -123,7 +142,7 @@ public class GazeReticle : MonoBehaviour
             if (Physics.SphereCast(camRay, 0.01f, out RaycastHit h, 20f, physicsMask))
             {
                 hitPos = h.point;
-                hitUp  = h.normal;
+                hitUp = h.normal;
                 gotHit = true;
             }
         }
@@ -157,8 +176,15 @@ public class GazeReticle : MonoBehaviour
         // Color
         var c = gotHit ? validColor : invalidColor;
         if (puttManager && puttManager.currentState == PuttLineManager.PlacementState.Sampling) c = samplingColor;
+        // --- GreenSlope-aware coloring ---
+        if (greenSlope)
+        {
+            // If the user hasn't placed the hole yet, use holeModeColor on valid hits
+            if (!greenSlope.HasHole) c = gotHit ? holeModeColor : invalidColor;
+            else c = gotHit ? boundaryModeColor : invalidColor;
+        }
         if (_reticleMat) SetMatColor(_reticleMat, c);
-        if (_lineMat)    SetMatColor(_lineMat,    c);
+        if (_lineMat) SetMatColor(_lineMat, c);
 
         // Ray line
         if (debugLine)
@@ -167,7 +193,27 @@ public class GazeReticle : MonoBehaviour
             debugLine.SetPosition(0, camPos);
             debugLine.SetPosition(1, _fPos);
         }
+
+        // --- Preview: line from LAST boundary point -> current gaze hit ---
+        if (showBoundaryPreview && previewLine)
+        {
+            if (greenSlope && greenSlope.BoundaryCount > 0 && gotHit && greenSlope.TryGetLastBoundaryPoint(out var last))
+            {
+                var p0 = last + Vector3.up * 0.001f;
+                var p1 = targetPos + Vector3.up * 0.001f;
+                previewLine.SetPosition(0, p0);
+                previewLine.SetPosition(1, p1);
+                // color to match boundary mode
+                SetMatColor(previewLine.material, boundaryModeColor);
+                previewLine.enabled = true;
+            }
+            else
+            {
+                previewLine.enabled = false;
+            }
+        }
     }
+
 
     // ---------- Helpers ----------
 
