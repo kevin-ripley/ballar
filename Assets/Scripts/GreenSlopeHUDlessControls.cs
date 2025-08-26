@@ -24,6 +24,9 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
     [Tooltip("Debounce for toggle (seconds)")]
     public float toggleDebounce = 0.18f;
 
+    [Header("New Intelligent Analysis Control")]
+    public InputActionReference intelligentModeAction; // New: toggle intelligent vs standard analysis
+
     // internal
     bool _holdUp, _holdDown;
     double _lastToggleTime = -1;
@@ -42,8 +45,8 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
         // Up
         if (thresholdUpAction != null)
         {
-            thresholdUpAction.action.started   += OnUpStarted;
-            thresholdUpAction.action.canceled  += OnUpCanceled;
+            thresholdUpAction.action.started += OnUpStarted;
+            thresholdUpAction.action.canceled += OnUpCanceled;
             thresholdUpAction.action.performed += OnUpPerformed; // some devices only send performed
             thresholdUpAction.action.Enable();
         }
@@ -51,8 +54,8 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
         // Down
         if (thresholdDownAction != null)
         {
-            thresholdDownAction.action.started   += OnDownStarted;
-            thresholdDownAction.action.canceled  += OnDownCanceled;
+            thresholdDownAction.action.started += OnDownStarted;
+            thresholdDownAction.action.canceled += OnDownCanceled;
             thresholdDownAction.action.performed += OnDownPerformed;
             thresholdDownAction.action.Enable();
         }
@@ -63,6 +66,12 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
             thresholdResetAction.action.performed += OnReset;
             thresholdResetAction.action.Enable();
         }
+
+        if (intelligentModeAction != null)
+        {
+            intelligentModeAction.action.performed += OnIntelligentModeToggle;
+            intelligentModeAction.action.Enable();
+        }
     }
 
     void OnDisable()
@@ -71,15 +80,15 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
 
         if (thresholdUpAction != null)
         {
-            thresholdUpAction.action.started   -= OnUpStarted;
-            thresholdUpAction.action.canceled  -= OnUpCanceled;
+            thresholdUpAction.action.started -= OnUpStarted;
+            thresholdUpAction.action.canceled -= OnUpCanceled;
             thresholdUpAction.action.performed -= OnUpPerformed;
         }
 
         if (thresholdDownAction != null)
         {
-            thresholdDownAction.action.started   -= OnDownStarted;
-            thresholdDownAction.action.canceled  -= OnDownCanceled;
+            thresholdDownAction.action.started -= OnDownStarted;
+            thresholdDownAction.action.canceled -= OnDownCanceled;
             thresholdDownAction.action.performed -= OnDownPerformed;
         }
 
@@ -93,7 +102,7 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
         float dt = Time.deltaTime;
         float v = greenSlope.ZeroThreshold;
 
-        if (_holdUp)   v += holdRate * dt;
+        if (_holdUp) v += holdRate * dt;
         if (_holdDown) v -= holdRate * dt;
 
         v = Mathf.Clamp(v, minPercent, maxPercent);
@@ -111,9 +120,9 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
         _lastToggleTime = ctx.time;
     }
 
-    void OnUpStarted(InputAction.CallbackContext ctx)    { _holdUp = true;  }
-    void OnUpCanceled(InputAction.CallbackContext ctx)   { _holdUp = false; }
-    void OnDownStarted(InputAction.CallbackContext ctx)  { _holdDown = true; }
+    void OnUpStarted(InputAction.CallbackContext ctx) { _holdUp = true; }
+    void OnUpCanceled(InputAction.CallbackContext ctx) { _holdUp = false; }
+    void OnDownStarted(InputAction.CallbackContext ctx) { _holdDown = true; }
     void OnDownCanceled(InputAction.CallbackContext ctx) { _holdDown = false; }
 
     // For devices that only send performed
@@ -139,10 +148,20 @@ public class GreenSlopeHUDlessControls : MonoBehaviour
     // --- Unity 2023+/Unity 6 safe find ---
     private static T FindOne<T>() where T : Object
     {
-    #if UNITY_2023_1_OR_NEWER
+#if UNITY_2023_1_OR_NEWER
         return Object.FindFirstObjectByType<T>(FindObjectsInactive.Include);
-    #else
+#else
         return Object.FindObjectOfType<T>(true);
-    #endif
+#endif
     }
+    
+    private void OnIntelligentModeToggle(InputAction.CallbackContext ctx)
+{
+    var intelligentSampler = greenSlope?.GetComponent<IntelligentTerrainSampler>();
+    if (intelligentSampler)
+    {
+        intelligentSampler.enableAdaptiveDensity = !intelligentSampler.enableAdaptiveDensity;
+        Debug.Log($"Intelligent sampling: {(intelligentSampler.enableAdaptiveDensity ? "ON" : "OFF")}");
+    }
+}
 }

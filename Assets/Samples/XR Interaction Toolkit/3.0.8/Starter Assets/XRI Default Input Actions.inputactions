@@ -3717,6 +3717,34 @@
                     "isPartOfComposite": false
                 }
             ]
+        },
+        {
+            "name": "ToggleIntelligentAnalysis",
+            "id": "d279f69e-e75e-48ab-99eb-762057bcecf5",
+            "actions": [
+                {
+                    "name": "New action",
+                    "type": "Button",
+                    "id": "0c6c734a-a327-4201-b350-f190c0ac7e4b",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "31446d94-705d-4e0b-9085-77f3c8190bfa",
+                    "path": "<XREALController>/ButtonId9",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "New action",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
         }
     ],
     "controlSchemes": []
