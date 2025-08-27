@@ -541,7 +541,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Threshold RESET
+  m_text: Toggle Intelligence Analysis
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -660,7 +660,7 @@ MonoBehaviour:
   maxPercent: 1
   defaultPercent: 0.3
   toggleDebounce: 0.18
-  intelligentModeAction: {fileID: 0}
+  intelligentModeAction: {fileID: 4729042249149279518, guid: c348712bda248c246b8c49b3db54643f, type: 3}
 --- !u!4 &84565821
 Transform:
   m_ObjectHideFlags: 0
